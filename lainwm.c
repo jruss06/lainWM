@@ -19,6 +19,7 @@
 #include <X11/keysym.h>
 #include <xcb/xcb.h>
 
+#define LENGTH(x) (sizeof(x)/sizeof(*x))
 
 uint32_t values[3];
 
@@ -71,23 +72,45 @@ xcb_get_keycodes(xcb_keysym_t keysym)
 	return keycode;
 }
 
+/* wrapper to get xcb keysymbol from keycode */
+static xcb_keysym_t
+xcb_get_keysym(xcb_keycode_t keycode)
+{
+	xcb_key_symbols_t *keysyms;
+
+	if (!(keysyms = xcb_key_symbols_alloc(dpy)))
+		return 0;
+
+	xcb_keysym_t keysym = xcb_key_symbols_get_keysym(keysyms, keycode, 0);
+	xcb_key_symbols_free(keysyms);
+
+	return keysym;
+}
 
 void
 grabkeys(void)
 {
 	xcb_keycode_t *keycode;
-	int k;
+	int i, k;
+	key_t keys[] = 
+	{ XK_w,
+	  XK_e	
+	};
 
 	xcb_ungrab_key(dpy, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
 
-		keycode = xcb_get_keycodes(XK_Tab);
-
-       for (k=0; keycode[k] != XCB_NO_SYMBOL; k++) {
+	for (i=0; i<LENGTH(keys) ; i++) {
+		keycode = xcb_get_keycodes(keys[i]);
+	
+           for (k=0; keycode[k] != XCB_NO_SYMBOL; k++) {
 			xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_1, keycode[k],
-					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC );
-       }
+			XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC );
+                      }         
+	
 
         free(keycode); 
+	}
+
         xcb_flush(dpy);
 }
 
@@ -97,7 +120,7 @@ void movewindow(xcb_drawable_t win, uint16_t x, uint16_t y)
 {
     uint32_t values[2];
 
-    if (screen->root == win || 0 == win)
+    if (root == win || 0 == win)
     {
         /* Can't move root. */
         return;
@@ -105,12 +128,30 @@ void movewindow(xcb_drawable_t win, uint16_t x, uint16_t y)
     
     values[0] = x;
     values[1] = y;
-
+ 
     xcb_configure_window(dpy, win, XCB_CONFIG_WINDOW_X
                          | XCB_CONFIG_WINDOW_Y, values);
     
     xcb_flush(dpy);
 }
+
+void canmove(xcb_drawable_t win, xcb_keysym_t keysym) {
+
+if (win != 0) {
+
+	 if (keysym == XK_w) 
+	 {
+           movewindow(win, 0, 0);
+	 }
+
+	 if (keysym == XK_e)  
+	 {
+           movewindow(win, screen->width_in_pixels - geom->width, 0);
+	 }
+}
+
+}
+
 
 
 int main (int argc, char **argv)
@@ -158,15 +199,10 @@ int main (int argc, char **argv)
 	 geom = xcb_get_geometry_reply(dpy, xcb_get_geometry(dpy, win), NULL);
 
 	 printf("Keycode: %d\n", e->detail);
-	 if (e->detail == 25) 
-	 {
-           movewindow(win, 0, 0);
-	 }
+	
+	 canmove(win, xcb_get_keysym(e->detail));
 
-	 if (e->detail == 26) 
-	 {
-           movewindow(win, screen->width_in_pixels - geom->width, 0);
-	 }
+
 
 	 xcb_flush(dpy);
 	}
@@ -213,7 +249,7 @@ int main (int argc, char **argv)
 					(screen->height_in_pixels - geom->height):pointer->root_y;
 				xcb_configure_window(dpy, win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
 				xcb_flush(dpy);
-            } else if (values[2] == 3) { /* resize */
+            } else if (values[2] == 3 && win != 0) { /* resize */
 				geom = xcb_get_geometry_reply(dpy, xcb_get_geometry(dpy, win), NULL);
 				values[0] = pointer->root_x - geom->x;
 				values[1] = pointer->root_y - geom->y;
