@@ -19,23 +19,18 @@
 #include <X11/keysym.h>
 #include <xcb/xcb.h>
 
-int main (int argc, char **argv)
-{
-    uint32_t values[3];
 
-	xcb_connection_t *dpy;
-	xcb_screen_t *screen;
-    xcb_drawable_t win;
-    xcb_drawable_t root;
+uint32_t values[3];
 
-	xcb_generic_event_t *ev;
-	xcb_get_geometry_reply_t *geom;
+xcb_generic_event_t *ev;
+xcb_get_geometry_reply_t *geom;
 
-    dpy = xcb_connect(NULL, NULL);
-    if (xcb_connection_has_error(dpy)) return 1;
+xcb_connection_t *dpy;
 
-    screen = xcb_setup_roots_iterator(xcb_get_setup(dpy)).data;
-    root = screen->root;
+xcb_screen_t *screen;
+xcb_drawable_t win;
+xcb_drawable_t root;
+
 
 bool
 setup_keyboard(void)
@@ -59,9 +54,6 @@ setup_keyboard(void)
 	return true;
 }
 
-setup_keyboard();
-
-
 
 /* wrapper to get xcb keycodes from keysymbol */
 xcb_keycode_t * 
@@ -78,6 +70,7 @@ xcb_get_keycodes(xcb_keysym_t keysym)
 
 	return keycode;
 }
+
 
 void
 grabkeys(void)
@@ -97,24 +90,6 @@ grabkeys(void)
         free(keycode); 
         xcb_flush(dpy);
 }
-
-    grabkeys();
-
-
-    xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_2, XCB_NO_SYMBOL,
-                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-
-    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
-				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
-				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 1, XCB_MOD_MASK_1);
-
-    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
-				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
-				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 3, XCB_MOD_MASK_1);
-
-    /*  xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_1, XCB_GRAB_ANY,
-			XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC); */
-    xcb_flush(dpy);
 
 
 /* Move window win to root coordinates x,y. */
@@ -136,6 +111,36 @@ void movewindow(xcb_drawable_t win, uint16_t x, uint16_t y)
     
     xcb_flush(dpy);
 }
+
+
+int main (int argc, char **argv)
+{
+
+    dpy = xcb_connect(NULL, NULL);
+    if (xcb_connection_has_error(dpy)) return 1;
+
+    screen = xcb_setup_roots_iterator(xcb_get_setup(dpy)).data;
+    root = screen->root;
+
+    setup_keyboard();
+
+    grabkeys();
+
+
+    xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_2, XCB_NO_SYMBOL,
+                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+
+    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
+				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
+				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 1, XCB_MOD_MASK_1);
+
+    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
+				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
+				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 3, XCB_MOD_MASK_1);
+
+    /*  xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_1, XCB_GRAB_ANY,
+			XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC); */
+    xcb_flush(dpy);
 
 
   for (;;)
