@@ -224,7 +224,7 @@ int main (int argc, char **argv)
 			if (1 == e->detail) {
 				values[2] = 1; 
 				 xcb_warp_pointer(dpy, XCB_NONE, win, 0, 0, 0, 0, 1, 1); 
-			} else  {
+			} else if (win != 0) {
 				values[2] = 3; 
 				 xcb_warp_pointer(dpy, XCB_NONE, win, 0, 0, 0, 0, geom->width, geom->height); 
 			}
