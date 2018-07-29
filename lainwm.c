@@ -32,6 +32,11 @@ xcb_screen_t *screen;
 xcb_drawable_t win;
 xcb_drawable_t root;
 
+key_t keys[] = 
+   { XK_w,
+     XK_e,
+     XK_p     
+   };
 
 bool
 setup_keyboard(void)
@@ -92,10 +97,7 @@ grabkeys(void)
 {
 	xcb_keycode_t *keycode;
 	int i, k;
-	key_t keys[] = 
-	{ XK_w,
-	  XK_e	
-	};
+
 
 	xcb_ungrab_key(dpy, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
 
@@ -137,7 +139,7 @@ void movewindow(xcb_drawable_t win, uint16_t x, uint16_t y)
 
 void canmove(xcb_drawable_t win, xcb_keysym_t keysym) {
 
-if (win != 0) {
+   if (win != 0) {
 
 	 if (keysym == XK_w) 
 	 {
@@ -148,11 +150,24 @@ if (win != 0) {
 	 {
            movewindow(win, screen->width_in_pixels - geom->width, 0);
 	 }
+   }
 }
 
+
+int
+start(void)
+{
+     pid_t pid=fork();
+    if (pid==0) { /* child process */
+        static char *argv[]={"dmenu_run",NULL ,NULL};
+        execv("/bin/dmenu_run",argv);
+        exit(127); /* only if execv fails */
+    }
+    else { /* pid!=0; parent process */
+       // waitpid(pid,0,0); /* wait for child to exit */
+    }
+    return 0;
 }
-
-
 
 int main (int argc, char **argv)
 {
@@ -200,9 +215,11 @@ int main (int argc, char **argv)
 
 	 printf("Keycode: %d\n", e->detail);
 	
-	 canmove(win, xcb_get_keysym(e->detail));
+	canmove(win, xcb_get_keysym(e->detail));
 
-
+	if (xcb_get_keysym(e->detail) == XK_p) {
+		start();
+	}
 
 	 xcb_flush(dpy);
 	}
