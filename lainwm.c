@@ -198,12 +198,20 @@ int main (int argc, char **argv)
     setup_keyboard();
     grabkeys();
 
+    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
+				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
+				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 1, XCB_MOD_MASK_1);
+    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
+				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
+				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 3, XCB_MOD_MASK_1);
+
     xcb_flush(dpy);
 
 
   for (;;)
     {
         ev = xcb_wait_for_event(dpy);
+	printf("event: %d \n", ev->response_type);
 	switch (ev->response_type & ~0x80) {
 
 	case XCB_KEY_PRESS: 
@@ -303,7 +311,7 @@ int main (int argc, char **argv)
 	default:
 	   printf("idk what to do");
         }
-	}
+    }
 
 return 0;
 }
