@@ -35,7 +35,8 @@ xcb_drawable_t root;
 key_t keys[] = 
    { XK_w,
      XK_e,
-     XK_p     
+     XK_p,
+     XCB_NO_SYMBOL     
    };
 
 bool
@@ -105,7 +106,7 @@ grabkeys(void)
 		keycode = xcb_get_keycodes(keys[i]);
 	
            for (k=0; keycode[k] != XCB_NO_SYMBOL; k++) {
-			xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_1, keycode[k],
+			xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_4, keycode[k],
 			XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC );
                       }         
 	
@@ -153,6 +154,22 @@ void canmove(xcb_drawable_t win, xcb_keysym_t keysym) {
    }
 }
 
+void
+newwin(xcb_window_t win) {
+	uint32_t mask = 0;
+
+	xcb_map_window(dpy, win);
+	 /* Declare window normal. */
+	long data[] = { XCB_ICCCM_WM_STATE_NORMAL, XCB_NONE };
+	//xcb_change_property(dpy, XCB_PROP_MODE_REPLACE, win,
+	//wm_state, wm_state, 32, 2, data);
+
+	 /* Subscribe to events we want to know about in this window. */
+	mask = XCB_CW_EVENT_MASK;
+	values[0] = XCB_EVENT_MASK_ENTER_WINDOW;
+	xcb_change_window_attributes_checked(dpy, win, mask, values);
+	xcb_flush(dpy);
+}
 
 int
 start(void)
@@ -179,32 +196,16 @@ int main (int argc, char **argv)
     root = screen->root;
 
     setup_keyboard();
-
     grabkeys();
 
-
-    xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_2, XCB_NO_SYMBOL,
-                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-
-    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
-				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
-				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 1, XCB_MOD_MASK_1);
-
-    xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
-				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
-				XCB_GRAB_MODE_ASYNC, root, XCB_NONE, 3, XCB_MOD_MASK_1);
-
-    /*  xcb_grab_key(dpy, 1, root, XCB_MOD_MASK_1, XCB_GRAB_ANY,
-			XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC); */
     xcb_flush(dpy);
 
 
   for (;;)
     {
         ev = xcb_wait_for_event(dpy);
+	switch (ev->response_type & ~0x80) {
 
-        switch (ev->response_type & ~0x80) {
-      
 	case XCB_KEY_PRESS: 
 	{
 	  xcb_key_press_event_t *e;
@@ -222,8 +223,8 @@ int main (int argc, char **argv)
 	}
 
 	 xcb_flush(dpy);
-	}
         break;
+	}
 
         case XCB_BUTTON_PRESS:
         {
@@ -249,8 +250,25 @@ int main (int argc, char **argv)
 					| XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_POINTER_MOTION_HINT, 
 					XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, root, XCB_NONE, XCB_CURRENT_TIME);
 			xcb_flush(dpy);
+			break;
         }
-        break;
+	case XCB_MAP_REQUEST:
+        {
+            xcb_map_request_event_t *e;
+
+            printf("event: Map request.\n");
+            e = (xcb_map_request_event_t *) ev;
+            newwin(e->window);
+	}
+
+	case XCB_ENTER_NOTIFY:
+	{
+		xcb_enter_notify_event_t *event;
+		xcb_enter_notify_event_t *enter = (xcb_enter_notify_event_t *)event;
+		printf("mouse did something");	
+	        xcb_flush(dpy);
+	break;
+	}
 
         case XCB_MOTION_NOTIFY:
         {
@@ -273,14 +291,17 @@ int main (int argc, char **argv)
 				xcb_configure_window(dpy, win, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
 				xcb_flush(dpy);
             }
-        }
         break;
+	}
 
         case XCB_BUTTON_RELEASE:
-
-			xcb_ungrab_pointer(dpy, XCB_CURRENT_TIME);
-			xcb_flush(dpy); 
+	{
+		xcb_ungrab_pointer(dpy, XCB_CURRENT_TIME);
+		xcb_flush(dpy); 
         break;
+	}
+	default:
+	   printf("idk what to do");
         }
 	}
 
