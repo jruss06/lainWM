@@ -6,6 +6,7 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -18,8 +19,15 @@
 #include <X11/keysym.h>
 #include <xcb/xcb.h>
 #include <sys/wait.h>
+#include <math.h>
 
 #define LENGTH(x) (sizeof(x)/sizeof(*x))
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+
+static int setuprandr(void);
+static void getrandr(void);
+static void getoutputs(xcb_randr_output_t *outputs, int len,
+xcb_timestamp_t timestamp);
 
 uint32_t values[3];
 
@@ -223,6 +231,126 @@ start(void)
     return 0;
 }
 
+int setuprandr(void)
+{
+    const xcb_query_extension_reply_t *extension;
+    int base;
+        
+    extension = xcb_get_extension_data(dpy, &xcb_randr_id);
+    if (!extension->present)
+    {
+        printf("No RANDR extension.\n");
+        return -1;
+    }
+    else
+    {
+        getrandr();
+    }
+
+    base = extension->first_event;
+    printf("randrbase is %d.\n", base);
+        
+    xcb_randr_select_input(dpy, screen->root,
+                           XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE |
+                           XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE |
+                           XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE |
+                           XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY);
+
+    xcb_flush(dpy);
+
+    return base;
+}
+
+/*
+ * Get RANDR resources and figure out how many outputs there are.
+ */ 
+void getrandr(void)
+{
+    xcb_randr_get_screen_resources_current_cookie_t rcookie;
+    xcb_randr_get_screen_resources_current_reply_t *res;
+    xcb_randr_output_t *outputs;
+    int len;    
+    xcb_timestamp_t timestamp;
+    
+    rcookie = xcb_randr_get_screen_resources_current(dpy, screen->root);
+    res = xcb_randr_get_screen_resources_current_reply(dpy, rcookie, NULL);
+    if (NULL == res)
+    {
+        printf("No RANDR extension available.\n");
+        return;
+    }
+    timestamp = res->config_timestamp;
+
+    len = xcb_randr_get_screen_resources_current_outputs_length(res);
+    outputs = xcb_randr_get_screen_resources_current_outputs(res);
+
+    printf("Found %d outputs.\n", len);
+    
+    /* Request information for all outputs. */
+    getoutputs(outputs, len, timestamp);
+
+    free(res);
+}
+
+
+void getoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp)
+{
+    char *name;
+    int name_len;
+    xcb_randr_get_crtc_info_cookie_t icookie;
+    xcb_randr_get_crtc_info_reply_t *crtc = NULL;
+    xcb_randr_get_output_info_reply_t *output;
+    struct monitor *mon;
+    xcb_randr_get_output_info_cookie_t ocookie[len];
+    int i;
+    
+    for (i = 0; i < len; i++)
+    {
+        ocookie[i] = xcb_randr_get_output_info(dpy, outputs[i], timestamp);
+    }
+
+    /* Loop through all outputs. */
+    for (i = 0; i < len; i ++)
+    {
+        output = xcb_randr_get_output_info_reply(dpy, ocookie[i], NULL);
+        
+        if (output == NULL)
+        {
+          return; 
+        }
+
+	name_len = MIN(16, xcb_randr_get_output_info_name_length(output));
+        name = malloc(name_len+1);
+
+        snprintf(name, name_len+1, "%.*s",
+                 xcb_randr_get_output_info_name_length(output),
+                 xcb_randr_get_output_info_name(output));
+
+        printf("Name: %s\n", name);
+        printf("id: %d\n" , outputs[i]);
+        printf("Size: %d x %d mm.\n", output->mm_width, output->mm_height);
+
+        if (XCB_NONE != output->crtc)
+        {
+            icookie = xcb_randr_get_crtc_info(dpy, output->crtc, timestamp);
+            crtc = xcb_randr_get_crtc_info_reply(dpy, icookie, NULL);
+            if (NULL == crtc)
+            {
+                return;
+            }
+            
+            printf("CRTC: at %d, %d, size: %d x %d.\n", crtc->x, crtc->y,
+                   crtc->width, crtc->height);
+ 
+            free(crtc);
+        }
+       
+        free(output);
+    }
+    return;
+}
+
+
 int main (int argc, char **argv)
 {
     xcb_generic_error_t *error;
@@ -252,6 +380,7 @@ int main (int argc, char **argv)
     if (NULL != error)
 	    exit(1);
 
+    setuprandr();
     setup_keyboard();
     grabkeys();
 
