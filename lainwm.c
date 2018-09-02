@@ -40,13 +40,13 @@ typedef struct monlist
    struct monlist * next; 
 } monlist_t;
 
-monlist_t * monhead = NULL;
+monlist_t *monhead = NULL;
 
 static int setuprandr(void);
 static void getrandr(void);
 static void getoutputs(xcb_randr_output_t *outputs, int len,
 xcb_timestamp_t timestamp);
-static void push(struct monlist *head, struct monitor *mon); 
+static void push(struct monitor *mon); 
 void print_list(monlist_t * head); 
 
 uint32_t values[3];
@@ -178,6 +178,10 @@ canmove(xcb_drawable_t win, xcb_keysym_t keysym)
 	 
 	 if (keysym == XK_e)  
             movewindow(win, screen->width_in_pixels - geom->width, 0);
+
+	 if (keysym == XK_l) { 
+	         movewindow(win, monhead->next->currentmon->x, 0); 
+	 }
    }
 }
 
@@ -253,23 +257,42 @@ start(void)
 }
 
 
-void push(struct monlist *head, struct monitor *mon) {
-    monlist_t *current = head;
+void push(struct monitor *mon) {
+   
+    if (monhead == NULL ) {
+        monhead = malloc(sizeof(monlist_t));
+        if (monhead == NULL) {
+	    printf("download more ram");
+	    return;
+	}	
+        monhead->currentmon = malloc(sizeof(struct monitor));
+	monhead->currentmon->id = mon->id;
+	monhead->currentmon->name = mon->name;
+	monhead->currentmon->x = mon->x;
+	monhead->currentmon->y = mon->y;
+	monhead->currentmon->width = mon->width;
+	monhead->currentmon->height = mon->height;
+	monhead->next = NULL;
+	printf("first monitor \n");
+    } else {
 
-    while (current->next != NULL) {
-        current = current->next;
+    while (monhead->next != NULL) {
+        monhead = monhead->next;
     }
 
-   /* now we can add a new variable */
-    current->next = malloc(sizeof(monlist_t));
-    current->next->currentmon = malloc(sizeof(struct monitor));
-    current->next->currentmon->name = mon->name;
-    current->next->currentmon->x = mon->x;
-    current->next->currentmon->y = mon->y;
-    current->next->currentmon->width = mon->width;
-    current->next->currentmon->height = mon->height;
-    current->next->next = NULL;
+      /* now we can add a new variable */
+     monhead->next = malloc(sizeof(monlist_t));
+     monhead->next->currentmon = malloc(sizeof(struct monitor));
+     monhead->next->currentmon->id = mon->id;
+     monhead->next->currentmon->name = mon->name;
+     monhead->next->currentmon->x = mon->x;
+     monhead->next->currentmon->y = mon->y;
+     monhead->next->currentmon->width = mon->width;
+     monhead->next->currentmon->height = mon->height;
+     monhead->next->next = NULL;
+    }
 }
+
 
 int setuprandr(void)
 {
@@ -352,6 +375,7 @@ void getoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp)
     struct monitor *mon;
     xcb_randr_get_output_info_cookie_t ocookie[len];
     int i;
+
     
     for (i = 0; i < len; i++)
     {
@@ -400,14 +424,8 @@ void getoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp)
 	    mon->width = crtc->width;
 	    mon->height = crtc->height;
 
-            monhead = malloc(sizeof(monlist_t));
-	    monhead->currentmon = malloc(sizeof(struct monitor));
-		if (monhead == NULL) {
-    		    printf("download more ram");
-		}	
 
-	    	push(monhead,mon);
-	   
+	    push(mon); 
 
             free(crtc);
 	    free(mon);
@@ -415,7 +433,6 @@ void getoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp)
        
         free(output);
     }
-    return;
 }
 
 
