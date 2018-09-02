@@ -42,13 +42,40 @@ typedef struct monlist
 
 monlist_t *monhead = NULL;
 
+/* Everything we know about a window. */
+struct client
+{
+    xcb_drawable_t id;          /* ID of this window. */
+    bool usercoord;             /* X,Y was set by -geom. */
+    int16_t x;                 /* X coordinate. */
+    int16_t y;                 /* Y coordinate. */
+    uint16_t width;             /* Width in pixels. */
+    uint16_t height;            /* Height in pixels. */
+    uint16_t min_width, min_height; /* Hints from application. */
+    uint16_t max_width, max_height;
+    int32_t width_inc, height_inc;
+    int32_t base_width, base_height;
+    bool vertmaxed;             /* Vertically maximized? */
+    bool maxed;                 /* Totally maximized? */
+    bool fixed;           /* Visible on all workspaces? */
+    struct monitor *monitor;    /* The physical output this window is on. */
+};
+
+typedef struct winitems
+{
+   struct client *theclient;
+   struct winitems *next;
+} winitems_t;
+
+winitems_t *winlist = NULL;
+
 static int setuprandr(void);
 static void getrandr(void);
 static void getoutputs(xcb_randr_output_t *outputs, int len,
 xcb_timestamp_t timestamp);
-static void push(struct monitor *mon); 
-void print_list(monlist_t * head); 
-
+static void push(struct monitor *mon);
+void print_list(winitems_t *head); 
+void appendwin(winitems_t** winlist_ref, struct client *client);
 uint32_t values[3];
 
 xcb_generic_event_t *ev;
@@ -67,6 +94,7 @@ key_t keys[] =
      XK_e,
      XK_p,
      XK_l,
+     XK_k,
      XCB_NO_SYMBOL     
    };
 
@@ -180,7 +208,12 @@ canmove(xcb_drawable_t win, xcb_keysym_t keysym)
             movewindow(win, screen->width_in_pixels - geom->width, 0);
 
 	 if (keysym == XK_l) { 
+	     if (monhead->next != NULL)
 	         movewindow(win, monhead->next->currentmon->x, 0); 
+	 }
+	 if (keysym == XK_k) { 
+	     if (monhead != NULL)
+	         movewindow(win, monhead->currentmon->x, 0); 
 	 }
    }
 }
@@ -224,10 +257,24 @@ void resize(xcb_drawable_t win, uint16_t width, uint16_t height)
 void
 newwin(xcb_window_t win) {
 	uint32_t mask = 0;
+	struct client *client;
 
+	client = malloc(sizeof(struct client));
+	client->monitor = malloc(sizeof(struct monitor));
+	client->id = win;
+   	client->x = 0;
+   	client->y = 0;
+   	client->width = 600;
+   	client->height = 400;
+   	client->monitor = monhead->currentmon;
+
+	printf("adding window %d\n", client->id);
+	appendwin(&winlist, client);
+	print_list(winlist);
+	
 	xcb_map_window(dpy, win);
 
-	resize(win, 200, 200);
+	resize(win, 600, 400);
 	 /* Declare window normal. */
 	long data[] = { XCB_ICCCM_WM_STATE_NORMAL, XCB_NONE };
 	//xcb_change_property(dpy, XCB_PROP_MODE_REPLACE, win,
@@ -238,6 +285,7 @@ newwin(xcb_window_t win) {
 	values[0] = XCB_EVENT_MASK_ENTER_WINDOW;
 	xcb_change_window_attributes_checked(dpy, win, mask, values);
 	setfocus(win);
+	free(client);
 	xcb_flush(dpy);
 }
 
@@ -256,6 +304,41 @@ start(void)
     return 0;
 }
 
+void appendwin(winitems_t** winlist_ref, struct client *client)
+{
+    /* 1. allocate node */
+    winitems_t *new_client = malloc(sizeof(winitems_t));
+    new_client->theclient = malloc(sizeof(struct client));
+ 
+    winitems_t *last = *winlist_ref;  
+  
+    /* 2. put in the data  */
+    new_client->theclient->id  = client->id;
+    new_client->theclient->x = client->x;
+    new_client->theclient->y = client->y;
+    new_client->theclient->width = client->width;
+    new_client->theclient->height = client->height; 
+    new_client->theclient->monitor = client->monitor;   
+ 
+    /* 3. This new node is going to be the last node, so make next 
+          of it as NULL*/
+    new_client->next = NULL;
+ 
+    /* 4. If the Linked List is empty, then make the new node as head */
+    if (*winlist_ref == NULL)
+    {
+       *winlist_ref = new_client;
+       return;
+    }  
+      
+    /* 5. Else traverse till the last node */
+    while (last->next != NULL)
+        last = last->next;
+  
+    /* 6. Change the next of last node */
+    last->next = new_client;
+    return;    
+}
 
 void push(struct monitor *mon) {
    
@@ -355,13 +438,12 @@ void getrandr(void)
     free(res);
 }
 
-void print_list(monlist_t * head) {
-    monlist_t * current = head;
-
-    while (current != NULL) {
-        printf("%d\n", current->currentmon->width);
-        current = current->next;
-    }
+void print_list(winitems_t *head) {
+  while (head != NULL)
+  {
+     printf(" %d \n", head->theclient->id);
+     head = head->next;
+  }
 }
 
 
@@ -468,7 +550,7 @@ int main (int argc, char **argv)
     setuprandr();
     setup_keyboard();
     grabkeys();
-    print_list(monhead);
+   
 
     xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
 				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
