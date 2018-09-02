@@ -24,10 +24,30 @@
 #define LENGTH(x) (sizeof(x)/sizeof(*x))
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 
+struct monitor
+{
+    xcb_randr_output_t id;
+    char *name;
+    int16_t x;                 /* X and Y. */
+    int16_t y;                 
+    uint16_t width;     /* Width in pixels. */
+    uint16_t height;    /* Height in pixels. */
+};
+
+typedef struct monlist 
+{
+   struct monitor *currentmon;
+   struct monlist * next; 
+} monlist_t;
+
+monlist_t * monhead = NULL;
+
 static int setuprandr(void);
 static void getrandr(void);
 static void getoutputs(xcb_randr_output_t *outputs, int len,
 xcb_timestamp_t timestamp);
+static void push(struct monlist *head, struct monitor *mon); 
+void print_list(monlist_t * head); 
 
 uint32_t values[3];
 
@@ -46,6 +66,7 @@ key_t keys[] =
    { XK_w,
      XK_e,
      XK_p,
+     XK_l,
      XCB_NO_SYMBOL     
    };
 
@@ -231,6 +252,25 @@ start(void)
     return 0;
 }
 
+
+void push(struct monlist *head, struct monitor *mon) {
+    monlist_t *current = head;
+
+    while (current->next != NULL) {
+        current = current->next;
+    }
+
+   /* now we can add a new variable */
+    current->next = malloc(sizeof(monlist_t));
+    current->next->currentmon = malloc(sizeof(struct monitor));
+    current->next->currentmon->name = mon->name;
+    current->next->currentmon->x = mon->x;
+    current->next->currentmon->y = mon->y;
+    current->next->currentmon->width = mon->width;
+    current->next->currentmon->height = mon->height;
+    current->next->next = NULL;
+}
+
 int setuprandr(void)
 {
     const xcb_query_extension_reply_t *extension;
@@ -292,6 +332,15 @@ void getrandr(void)
     free(res);
 }
 
+void print_list(monlist_t * head) {
+    monlist_t * current = head;
+
+    while (current != NULL) {
+        printf("%d\n", current->currentmon->width);
+        current = current->next;
+    }
+}
+
 
 void getoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp)
 {
@@ -341,8 +390,27 @@ void getoutputs(xcb_randr_output_t *outputs, int len, xcb_timestamp_t timestamp)
             
             printf("CRTC: at %d, %d, size: %d x %d.\n", crtc->x, crtc->y,
                    crtc->width, crtc->height);
- 
+
+            mon = malloc(sizeof (struct monitor));	
+
+	    mon->id = outputs[i]; 
+	    mon->name = name;
+	    mon->x = crtc->x;
+	    mon->y = crtc->y;
+	    mon->width = crtc->width;
+	    mon->height = crtc->height;
+
+            monhead = malloc(sizeof(monlist_t));
+	    monhead->currentmon = malloc(sizeof(struct monitor));
+		if (monhead == NULL) {
+    		    printf("download more ram");
+		}	
+
+	    	push(monhead,mon);
+	   
+
             free(crtc);
+	    free(mon);
         }
        
         free(output);
@@ -383,6 +451,7 @@ int main (int argc, char **argv)
     setuprandr();
     setup_keyboard();
     grabkeys();
+    print_list(monhead);
 
     xcb_grab_button(dpy, 0, root, XCB_EVENT_MASK_BUTTON_PRESS | 
 				XCB_EVENT_MASK_BUTTON_RELEASE, XCB_GRAB_MODE_ASYNC, 
@@ -490,7 +559,7 @@ int main (int argc, char **argv)
 		xcb_flush(dpy); 
 	}break;
 	default: {
-	   printf("idk what to do \n");
+	   //printf("no event \n");
 	}break;
         }
 	free(ev);
